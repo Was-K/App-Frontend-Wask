@@ -12,11 +12,13 @@ class ProductDetailScreen extends StatefulWidget {
     required this.productId,
     required this.productName,
     required this.price,
+    this.supplierId,
   });
 
   final String productId;
   final String productName;
   final double price;
+  final String? supplierId;
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -115,6 +117,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 name: widget.productName,
                 price: widget.price,
                 quantity: _quantity,
+                supplierId: widget.supplierId,
               );
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

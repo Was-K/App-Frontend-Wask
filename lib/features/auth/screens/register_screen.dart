@@ -14,16 +14,21 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isAgeVerified = false;
+  String _role = 'BUSINESS';
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -35,20 +40,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    await context.read<AppStateProvider>().register(
-          name: _nameController.text,
-          email: _emailController.text,
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (firstName.isEmpty || lastName.isEmpty || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Completa todos los campos.')),
+      );
+      return;
+    }
+
+    if (password.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('La contrasena debe tener al menos 10 caracteres.')),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Las contrasenas no coinciden.')),
+      );
+      return;
+    }
+
+    final user = await context.read<AppStateProvider>().register(
+          firstName: firstName,
+          lastName: lastName,
+          email: email,
+          password: password,
+          role: _role,
         );
 
     if (!mounted) {
       return;
     }
 
-    Navigator.pushReplacementNamed(context, WaskRoutes.addressSelect);
+    if (user == null) {
+      final message = context.read<AppStateProvider>().errorMessage ??
+          'No se pudo completar el registro.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      return;
+    }
+
+    if ((user.status ?? '').toUpperCase() == 'PENDING' ||
+        user.isVerified == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Cuenta creada. Revisa tu correo para verificar la cuenta.'),
+        ),
+      );
+    }
+
+    Navigator.pushReplacementNamed(context, WaskRoutes.login);
   }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppStateProvider>();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Crear cuenta')),
       body: SafeArea(
@@ -69,10 +126,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 24),
               TextField(
-                controller: _nameController,
+                controller: _firstNameController,
                 decoration: const InputDecoration(
-                  hintText: 'Nombre completo',
+                  hintText: 'Nombre',
                   prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _lastNameController,
+                decoration: const InputDecoration(
+                  hintText: 'Apellido',
+                  prefixIcon: Icon(Icons.badge_outlined),
                 ),
               ),
               const SizedBox(height: 16),
@@ -92,6 +157,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   hintText: 'Contrasena',
                   prefixIcon: Icon(Icons.lock_outline_rounded),
                 ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  hintText: 'Confirmar contrasena',
+                  prefixIcon: Icon(Icons.lock_reset_rounded),
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _role,
+                decoration: const InputDecoration(
+                  labelText: 'Rol',
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'BUSINESS',
+                    child: Text('Negocio (BUSINESS)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'SUPPLIER',
+                    child: Text('Proveedor (SUPPLIER)'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _role = value;
+                  });
+                },
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
@@ -125,11 +224,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 24),
               WaskButton(
-                label: 'CREAR CUENTA',
+                label: appState.isLoading ? 'CREANDO...' : 'CREAR CUENTA',
                 expanded: true,
-                onPressed: () {
-                  _register();
-                },
+                onPressed: appState.isLoading ? null : _register,
               ),
             ],
           ),

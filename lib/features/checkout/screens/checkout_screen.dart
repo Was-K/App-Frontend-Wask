@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/navigation/wask_routes.dart';
 import '../../../core/theme/wask_theme.dart';
-import '../../home/data/mock_marketplace_data.dart';
 import '../../shared/models/app_models.dart';
 import '../../shared/providers/app_state_provider.dart';
 import '../../shop/providers/cart_provider.dart';
@@ -24,6 +24,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _paymentType = 'Efectivo';
   String _paymentFlow = 'Contra entrega';
   final _couponController = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -164,9 +165,54 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: cart.itemList.isEmpty
+                  onPressed: cart.itemList.isEmpty || _isSubmitting
                       ? null
                       : () async {
+                          final appState = context.read<AppStateProvider>();
+                          final currentUser = appState.currentUser;
+                          final businessId = currentUser?.companyId;
+                          final supplierIds = cart.itemList
+                              .map((item) => item.supplierId)
+                              .whereType<String>()
+                              .toSet();
+
+                          if (businessId == null || businessId.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'No se puede crear el pedido porque falta businessId.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (supplierIds.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'No se puede crear el pedido porque falta supplierId.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (supplierIds.length > 1) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'El carrito tiene productos de varios proveedores.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setState(() {
+                            _isSubmitting = true;
+                          });
+
                           final items = cart.itemList
                               .map(
                                 (item) => OrderLine(
@@ -178,25 +224,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               )
                               .toList();
 
-                          await context.read<AppStateProvider>().placeOrder(
-                                items: items,
-                                storeName: marketplaceStores.first.name,
-                                paymentMethod: '$_paymentFlow - $_paymentType',
-                                subtotal: subtotal,
-                                deliveryCost: delivery,
-                                discount: discount,
-                                deliveryNote: widget.deliveryInstruction,
-                              );
+                          final order = await appState.placeOrder(
+                            items: items,
+                            storeName: 'Proveedor WAS-K',
+                            paymentMethod: '$_paymentFlow - $_paymentType',
+                            subtotal: subtotal,
+                            deliveryCost: delivery,
+                            discount: discount,
+                            deliveryNote: widget.deliveryInstruction,
+                            businessId: businessId,
+                            supplierId: supplierIds.first,
+                          );
 
                           if (!mounted) {
                             return;
+                          }
+
+                          setState(() {
+                            _isSubmitting = false;
+                          });
+
+                          if (order == null) {
+                            final message = appState.errorMessage ??
+                                'No se pudo crear el pedido.';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message)),
+                            );
+                            return;
+                          }
+
+                          if (!AppConfig.enableMocks) {
+                            await appState.loadOrders();
                           }
 
                           context.read<CartProvider>().clear();
 
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text('Pago realizado con exito.')),
+                                content: Text('Pedido creado con exito.')),
                           );
 
                           Navigator.pushNamedAndRemoveUntil(
@@ -205,7 +270,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             (route) => false,
                           );
                         },
-                  child: const Text('Pagar'),
+                  child: Text(_isSubmitting ? 'Procesando...' : 'Pagar'),
                 ),
               ],
             ),

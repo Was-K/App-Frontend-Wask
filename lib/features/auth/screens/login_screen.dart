@@ -36,11 +36,30 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    await context.read<AppStateProvider>().signIn(
-          email: _emailController.text,
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Completa correo y contrasena.')),
+      );
+      return;
+    }
+
+    final success = await context.read<AppStateProvider>().signIn(
+          email: email,
+          password: password,
         );
 
     if (!mounted) {
+      return;
+    }
+
+    if (!success) {
+      final message = context.read<AppStateProvider>().errorMessage ??
+          'No se pudo iniciar sesion.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
       return;
     }
 
@@ -49,6 +68,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppStateProvider>();
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -148,11 +169,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
                   WaskButton(
-                    label: 'INICIAR SESION',
+                    label:
+                        appState.isLoading ? 'INICIANDO...' : 'INICIAR SESION',
                     expanded: true,
-                    onPressed: () {
-                      _continueToHome();
-                    },
+                    onPressed: appState.isLoading ? null : _continueToHome,
                   ),
                   const SizedBox(height: 8),
                   TextButton(

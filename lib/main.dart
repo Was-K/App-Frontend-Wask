@@ -72,6 +72,7 @@ class WaskApp extends StatelessWidget {
                 productId: (args?['id'] ?? 'producto_default') as String,
                 productName: (args?['name'] ?? 'Producto WAS-K') as String,
                 price: ((args?['price'] ?? 0) as num).toDouble(),
+                supplierId: args?['supplierId'] as String?,
               ),
             );
           }

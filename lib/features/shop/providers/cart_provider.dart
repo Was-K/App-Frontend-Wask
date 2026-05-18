@@ -6,24 +6,28 @@ class CartItem {
     required this.name,
     required this.price,
     required this.quantity,
+    this.supplierId,
   });
 
   final String productId;
   final String name;
   final double price;
   final int quantity;
+  final String? supplierId;
 
   CartItem copyWith({
     String? productId,
     String? name,
     double? price,
     int? quantity,
+    String? supplierId,
   }) {
     return CartItem(
       productId: productId ?? this.productId,
       name: name ?? this.name,
       price: price ?? this.price,
       quantity: quantity ?? this.quantity,
+      supplierId: supplierId ?? this.supplierId,
     );
   }
 
@@ -60,6 +64,7 @@ class CartProvider extends ChangeNotifier {
     required String name,
     required double price,
     int quantity = 1,
+    String? supplierId,
   }) {
     final current = _items[productId];
     if (current == null) {
@@ -68,6 +73,7 @@ class CartProvider extends ChangeNotifier {
         name: name,
         price: price,
         quantity: quantity,
+        supplierId: supplierId,
       );
     } else {
       _items[productId] =

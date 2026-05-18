@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/wask_theme.dart';
+import '../../logistics/data/logistics_service.dart';
+import '../../shared/providers/app_state_provider.dart';
 import '../../shared/widgets/wask_button.dart';
 import '../providers/tracking_provider.dart';
 
@@ -13,12 +16,29 @@ class TrackingScreen extends StatefulWidget {
 }
 
 class _TrackingScreenState extends State<TrackingScreen> {
+  LogisticsService? _logisticsService;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TrackingProvider>().resetAndStart();
     });
+
+    if (!AppConfig.enableMocks) {
+      final apiClient = context.read<AppStateProvider>().apiClient;
+      _logisticsService = LogisticsService(apiClient: apiClient);
+      _fetchShipments();
+    }
+  }
+
+  Future<void> _fetchShipments() async {
+    try {
+      final shipments = await _logisticsService?.getShipments();
+      debugPrint('Shipments loaded: ${shipments?.length ?? 0}');
+    } catch (error) {
+      debugPrint('Error loading shipments: $error');
+    }
   }
 
   @override

@@ -3,24 +3,43 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/config/app_config.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/token_storage.dart';
+import '../../auth/data/auth_service.dart';
+import '../../orders/data/orders_service.dart';
 import '../models/app_models.dart';
 
 class AppStateProvider extends ChangeNotifier {
-  AppStateProvider._(this._prefs);
+  AppStateProvider._(
+    this._prefs,
+    this._tokenStorage,
+    this._apiClient,
+    this._authService,
+    this._ordersService,
+  );
 
   final SharedPreferences _prefs;
-
-  static const String _usersKey = 'wask_users';
+  final TokenStorage _tokenStorage;
+  final ApiClient _apiClient;
+  final AuthService _authService;
+  final OrdersService _ordersService;
 
   AppUser? _currentUser;
   List<DeliveryAddress> _addresses = <DeliveryAddress>[];
   String? _selectedAddressId;
   List<OrderRecord> _orders = <OrderRecord>[];
+  bool _isLoading = false;
+  String? _errorMessage;
 
   AppUser? get currentUser => _currentUser;
   List<DeliveryAddress> get addresses =>
       List<DeliveryAddress>.unmodifiable(_addresses);
   List<OrderRecord> get orders => List<OrderRecord>.unmodifiable(_orders);
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
+  ApiClient get apiClient => _apiClient;
 
   DeliveryAddress? get selectedAddress {
     if (_selectedAddressId == null) {
@@ -39,52 +58,95 @@ class AppStateProvider extends ChangeNotifier {
     if (fullName.isEmpty) {
       return 'Invitado';
     }
-
     return fullName.split(RegExp(r'\s+')).first;
   }
 
   static Future<AppStateProvider> create() async {
     final prefs = await SharedPreferences.getInstance();
-    return AppStateProvider._(prefs);
+    final tokenStorage = TokenStorage(prefs);
+    final apiClient = ApiClient(tokenStorage: tokenStorage);
+    final authService = AuthService(
+      apiClient: apiClient,
+      tokenStorage: tokenStorage,
+    );
+    final ordersService = OrdersService(apiClient: apiClient);
+
+    final provider = AppStateProvider._(
+      prefs,
+      tokenStorage,
+      apiClient,
+      authService,
+      ordersService,
+    );
+    await provider.restoreSession();
+    return provider;
   }
 
-  Future<void> signIn({required String email, String? nameHint}) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    final usersMap = _loadUsers();
-
-    if (!usersMap.containsKey(normalizedEmail)) {
-      usersMap[normalizedEmail] = (nameHint?.trim().isNotEmpty ?? false)
-          ? nameHint!.trim()
-          : _nameFromEmail(normalizedEmail);
-      await _prefs.setString(_usersKey, jsonEncode(usersMap));
+  Future<void> restoreSession() async {
+    _addresses = _loadAddresses();
+    _selectedAddressId = _prefs.getString(_selectedAddressKey());
+    if (_addresses.isNotEmpty && selectedAddress == null) {
+      _selectedAddressId = _addresses.first.id;
+      await _saveSelectedAddress();
     }
 
-    _currentUser = AppUser(
-      name: usersMap[normalizedEmail] ?? _nameFromEmail(normalizedEmail),
-      email: normalizedEmail,
-    );
-
-    await _loadUserData();
-    notifyListeners();
+    final accessToken = await _tokenStorage.getAccessToken();
+    if (accessToken == null || accessToken.isEmpty) {
+      return;
+    }
+    try {
+      _currentUser = await _authService.getCurrentUser();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Restore session failed: $error');
+    }
   }
 
-  Future<void> register({
-    required String name,
+  Future<bool> signIn({required String email, required String password}) async {
+    _setLoading(true);
+    _errorMessage = null;
+    try {
+      await _authService.login(email, password);
+      _currentUser = await _authService.getCurrentUser();
+      await _loadUserData();
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _errorMessage = _friendlyError(error);
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<AppUser?> register({
+    required String firstName,
+    required String lastName,
     required String email,
+    required String password,
+    required String role,
+    String? companyId,
+    String? supplierId,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    final usersMap = _loadUsers();
-    usersMap[normalizedEmail] =
-        name.trim().isEmpty ? _nameFromEmail(normalizedEmail) : name.trim();
-    await _prefs.setString(_usersKey, jsonEncode(usersMap));
-
-    _currentUser = AppUser(
-      name: usersMap[normalizedEmail]!,
-      email: normalizedEmail,
-    );
-
-    await _loadUserData();
-    notifyListeners();
+    _setLoading(true);
+    _errorMessage = null;
+    try {
+      final user = await _authService.register(
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
+        password: password,
+        role: role,
+        companyId: companyId,
+        supplierId: supplierId,
+      );
+      return user;
+    } catch (error) {
+      _errorMessage = _friendlyError(error);
+      return null;
+    } finally {
+      _setLoading(false);
+    }
   }
 
   Future<void> addAddress({
@@ -117,7 +179,7 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> placeOrder({
+  Future<OrderRecord?> placeOrder({
     required List<OrderLine> items,
     required String storeName,
     required String paymentMethod,
@@ -125,34 +187,58 @@ class AppStateProvider extends ChangeNotifier {
     required double deliveryCost,
     required double discount,
     required String deliveryNote,
+    required String businessId,
+    required String supplierId,
   }) async {
     if (_currentUser == null || selectedAddress == null || items.isEmpty) {
-      return;
+      return null;
     }
 
-    final total = subtotal + deliveryCost - discount;
-    final order = OrderRecord(
-      id: 'WK-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
-      createdAt: DateTime.now(),
-      deliveryEta: '25-30 min',
-      storeName: storeName,
-      address: selectedAddress!.formatted,
-      items: items,
-      subtotal: subtotal,
-      deliveryCost: deliveryCost,
-      discount: discount,
-      total: total,
-      paymentMethod: paymentMethod,
-      status: 'En camino',
-      deliveryNote: deliveryNote,
-    );
+    if (AppConfig.enableMocks) {
+      final total = subtotal + deliveryCost - discount;
+      final order = OrderRecord(
+        id: 'WK-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
+        createdAt: DateTime.now(),
+        deliveryEta: '25-30 min',
+        storeName: storeName,
+        address: selectedAddress!.formatted,
+        items: items,
+        subtotal: subtotal,
+        deliveryCost: deliveryCost,
+        discount: discount,
+        total: total,
+        paymentMethod: paymentMethod,
+        status: 'EN_CAMINO',
+        deliveryNote: deliveryNote,
+        businessId: businessId,
+        supplierId: supplierId,
+      );
+      _orders = <OrderRecord>[order, ..._orders];
+      await _saveOrders();
+      notifyListeners();
+      return order;
+    }
 
-    _orders = <OrderRecord>[order, ..._orders];
-    await _saveOrders();
-    notifyListeners();
+    _setLoading(true);
+    _errorMessage = null;
+    try {
+      final order = await _ordersService.createOrder(
+        businessId: businessId,
+        supplierId: supplierId,
+        items: items,
+        notes: deliveryNote,
+      );
+      return order;
+    } catch (error) {
+      _errorMessage = _friendlyError(error);
+      return null;
+    } finally {
+      _setLoading(false);
+    }
   }
 
   Future<void> logout() async {
+    await _authService.logout();
     _currentUser = null;
     _addresses = <DeliveryAddress>[];
     _selectedAddressId = null;
@@ -160,29 +246,38 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadOrders() async {
+    if (AppConfig.enableMocks) {
+      _orders = _loadOrders();
+      notifyListeners();
+      return;
+    }
+
+    _setLoading(true);
+    _errorMessage = null;
+    try {
+      _orders = await _ordersService.getOrders();
+      notifyListeners();
+    } catch (error) {
+      _errorMessage = _friendlyError(error);
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   Future<void> _loadUserData() async {
     _addresses = _loadAddresses();
     _selectedAddressId = _prefs.getString(_selectedAddressKey());
-    _orders = _loadOrders();
+    if (AppConfig.enableMocks) {
+      _orders = _loadOrders();
+    } else {
+      _orders = <OrderRecord>[];
+    }
 
     if (_addresses.isNotEmpty && selectedAddress == null) {
       _selectedAddressId = _addresses.first.id;
       await _saveSelectedAddress();
     }
-  }
-
-  Map<String, String> _loadUsers() {
-    final raw = _prefs.getString(_usersKey);
-    if (raw == null || raw.isEmpty) {
-      return <String, String>{};
-    }
-
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
-      return <String, String>{};
-    }
-
-    return decoded.map((key, value) => MapEntry(key, '$value'));
   }
 
   List<DeliveryAddress> _loadAddresses() {
@@ -245,19 +340,27 @@ class AppStateProvider extends ChangeNotifier {
 
   String _ordersKey() => 'wask_orders_${_currentUser?.email ?? ''}';
 
-  String _nameFromEmail(String email) {
-    final base = email.split('@').first;
-    if (base.isEmpty) {
-      return 'Usuario';
+  void _setLoading(bool value) {
+    _isLoading = value;
+    notifyListeners();
+  }
+
+  String _friendlyError(Object error) {
+    if (error is ApiException) {
+      if (error.statusCode == 401) {
+        return 'Tu sesion expiro. Inicia sesion nuevamente.';
+      }
+      if (error.statusCode == 403) {
+        return 'No tienes permisos para esta accion.';
+      }
+      if (error.statusCode == 404) {
+        return 'Recurso no encontrado.';
+      }
+      if (error.statusCode != null && error.statusCode! >= 500) {
+        return 'El servidor tuvo un problema. Intenta luego.';
+      }
+      return error.message;
     }
-    final normalized = base.replaceAll('.', ' ').replaceAll('_', ' ').trim();
-    if (normalized.isEmpty) {
-      return 'Usuario';
-    }
-    return normalized
-        .split(' ')
-        .where((part) => part.isNotEmpty)
-        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-        .join(' ');
+    return 'Ocurrio un error inesperado.';
   }
 }

@@ -1,8 +1,200 @@
 class AppUser {
-  const AppUser({required this.name, required this.email});
+  const AppUser({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+    required this.role,
+    this.uuid,
+    this.companyId,
+    this.supplierId,
+    this.status,
+    this.isVerified,
+  });
 
-  final String name;
+  final String id;
+  final String? uuid;
+  final String firstName;
+  final String lastName;
   final String email;
+  final String role;
+  final String? companyId;
+  final String? supplierId;
+  final String? status;
+  final bool? isVerified;
+
+  String get name {
+    final full =
+        [firstName, lastName].where((part) => part.isNotEmpty).join(' ');
+    return full.trim();
+  }
+
+  factory AppUser.fromJson(Map<String, dynamic> json) {
+    return AppUser(
+      id: _asString(json['id']) ?? _asString(json['uuid']) ?? '',
+      uuid: _asString(json['uuid']),
+      firstName: _asString(json['firstName']) ?? '',
+      lastName: _asString(json['lastName']) ?? '',
+      email: _asString(json['email']) ?? '',
+      role: _asString(json['role']) ?? 'BUSINESS',
+      companyId: _asString(json['companyId']),
+      supplierId: _asString(json['supplierId']),
+      status: _asString(json['status']),
+      isVerified: _asBool(json['isVerified']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'uuid': uuid,
+      'firstName': firstName,
+      'lastName': lastName,
+      'email': email,
+      'role': role,
+      'companyId': companyId,
+      'supplierId': supplierId,
+      'status': status,
+      'isVerified': isVerified,
+    };
+  }
+}
+
+class AuthTokens {
+  const AuthTokens({required this.accessToken, required this.refreshToken});
+
+  final String accessToken;
+  final String refreshToken;
+
+  factory AuthTokens.fromJson(Map<String, dynamic> json) {
+    return AuthTokens(
+      accessToken: _asString(json['accessToken']) ?? '',
+      refreshToken: _asString(json['refreshToken']) ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'accessToken': accessToken,
+      'refreshToken': refreshToken,
+    };
+  }
+}
+
+class Product {
+  const Product({
+    required this.id,
+    required this.name,
+    required this.price,
+    this.category,
+    this.supplierId,
+    this.brand,
+    this.description,
+    this.isActive,
+  });
+
+  final String id;
+  final String name;
+  final double price;
+  final String? category;
+  final String? supplierId;
+  final String? brand;
+  final String? description;
+  final bool? isActive;
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: _asString(json['id']) ?? _asString(json['uuid']) ?? '',
+      name: _asString(json['name']) ?? '',
+      price: _asDouble(json['price'] ?? json['unitPrice']),
+      category: _asString(json['category']),
+      supplierId: _asString(json['supplierId']),
+      brand: _asString(json['brand']),
+      description: _asString(json['description']),
+      isActive: _asBool(json['isActive']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'price': price,
+      'category': category,
+      'supplierId': supplierId,
+      'brand': brand,
+      'description': description,
+      'isActive': isActive,
+    };
+  }
+}
+
+class Supplier {
+  const Supplier({
+    required this.id,
+    required this.name,
+    this.status,
+    this.isVerified,
+    this.email,
+    this.phone,
+  });
+
+  final String id;
+  final String name;
+  final String? status;
+  final bool? isVerified;
+  final String? email;
+  final String? phone;
+
+  factory Supplier.fromJson(Map<String, dynamic> json) {
+    return Supplier(
+      id: _asString(json['id']) ?? _asString(json['uuid']) ?? '',
+      name: _asString(json['name']) ?? '',
+      status: _asString(json['status']),
+      isVerified: _asBool(json['isVerified']),
+      email: _asString(json['email']),
+      phone: _asString(json['phone']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'status': status,
+      'isVerified': isVerified,
+      'email': email,
+      'phone': phone,
+    };
+  }
+}
+
+class Business {
+  const Business({
+    required this.id,
+    required this.name,
+    this.status,
+  });
+
+  final String id;
+  final String name;
+  final String? status;
+
+  factory Business.fromJson(Map<String, dynamic> json) {
+    return Business(
+      id: _asString(json['id']) ?? _asString(json['uuid']) ?? '',
+      name: _asString(json['name']) ?? '',
+      status: _asString(json['status']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'status': status,
+    };
+  }
 }
 
 class DeliveryAddress {
@@ -46,33 +238,33 @@ class DeliveryAddress {
 class OrderLine {
   const OrderLine({
     required this.productId,
-    required this.name,
-    required this.price,
     required this.quantity,
+    this.name,
+    this.price,
   });
 
   final String productId;
-  final String name;
-  final double price;
   final int quantity;
+  final String? name;
+  final double? price;
 
-  double get lineTotal => price * quantity;
+  double get lineTotal => (price ?? 0) * quantity;
 
   Map<String, dynamic> toJson() {
     return {
       'productId': productId,
-      'name': name,
-      'price': price,
       'quantity': quantity,
+      if (name != null) 'name': name,
+      if (price != null) 'price': price,
     };
   }
 
   factory OrderLine.fromJson(Map<String, dynamic> json) {
     return OrderLine(
       productId: json['productId'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      price: (json['price'] as num?)?.toDouble() ?? 0,
-      quantity: json['quantity'] as int? ?? 1,
+      name: _asString(json['name']),
+      price: _asDouble(json['price'] ?? json['unitPrice']),
+      quantity: _asInt(json['quantity']) ?? 1,
     );
   }
 }
@@ -81,48 +273,54 @@ class OrderRecord {
   const OrderRecord({
     required this.id,
     required this.createdAt,
-    required this.deliveryEta,
-    required this.storeName,
-    required this.address,
     required this.items,
-    required this.subtotal,
-    required this.deliveryCost,
-    required this.discount,
     required this.total,
-    required this.paymentMethod,
     required this.status,
-    required this.deliveryNote,
+    this.deliveryEta,
+    this.storeName,
+    this.address,
+    this.subtotal,
+    this.deliveryCost,
+    this.discount,
+    this.paymentMethod,
+    this.deliveryNote,
+    this.businessId,
+    this.supplierId,
   });
 
   final String id;
   final DateTime createdAt;
-  final String deliveryEta;
-  final String storeName;
-  final String address;
   final List<OrderLine> items;
-  final double subtotal;
-  final double deliveryCost;
-  final double discount;
   final double total;
-  final String paymentMethod;
   final String status;
-  final String deliveryNote;
+  final String? deliveryEta;
+  final String? storeName;
+  final String? address;
+  final double? subtotal;
+  final double? deliveryCost;
+  final double? discount;
+  final String? paymentMethod;
+  final String? deliveryNote;
+  final String? businessId;
+  final String? supplierId;
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'createdAt': createdAt.toIso8601String(),
+      'items': items.map((item) => item.toJson()).toList(),
+      'total': total,
+      'status': status,
       'deliveryEta': deliveryEta,
       'storeName': storeName,
       'address': address,
-      'items': items.map((item) => item.toJson()).toList(),
       'subtotal': subtotal,
       'deliveryCost': deliveryCost,
       'discount': discount,
-      'total': total,
       'paymentMethod': paymentMethod,
-      'status': status,
       'deliveryNote': deliveryNote,
+      'businessId': businessId,
+      'supplierId': supplierId,
     };
   }
 
@@ -135,17 +333,62 @@ class OrderRecord {
       id: json['id'] as String? ?? '',
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
-      deliveryEta: json['deliveryEta'] as String? ?? '30 min',
-      storeName: json['storeName'] as String? ?? 'Licoreria WAS-K',
-      address: json['address'] as String? ?? '',
       items: rawItems.map(OrderLine.fromJson).toList(),
-      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
-      deliveryCost: (json['deliveryCost'] as num?)?.toDouble() ?? 0,
-      discount: (json['discount'] as num?)?.toDouble() ?? 0,
-      total: (json['total'] as num?)?.toDouble() ?? 0,
-      paymentMethod: json['paymentMethod'] as String? ?? 'Efectivo',
-      status: json['status'] as String? ?? 'En camino',
-      deliveryNote: json['deliveryNote'] as String? ?? '',
+      total: _asDouble(json['total'] ?? json['grandTotal']),
+      status: _asString(json['status']) ?? 'PENDIENTE',
+      deliveryEta: _asString(json['deliveryEta']),
+      storeName: _asString(json['storeName'] ?? json['supplierName']),
+      address: _asString(json['address']),
+      subtotal: _asDouble(json['subtotal']),
+      deliveryCost: _asDouble(json['deliveryCost']),
+      discount: _asDouble(json['discount']),
+      paymentMethod: _asString(json['paymentMethod']),
+      deliveryNote: _asString(json['deliveryNote'] ?? json['notes']),
+      businessId: _asString(json['businessId']),
+      supplierId: _asString(json['supplierId']),
     );
   }
+}
+
+String? _asString(dynamic value) {
+  if (value is String) {
+    return value;
+  }
+  if (value == null) {
+    return null;
+  }
+  return value.toString();
+}
+
+double _asDouble(dynamic value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value) ?? 0;
+  }
+  return 0;
+}
+
+int? _asInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  if (value is String) {
+    return int.tryParse(value);
+  }
+  return null;
+}
+
+bool? _asBool(dynamic value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    return value.toLowerCase() == 'true';
+  }
+  return null;
 }

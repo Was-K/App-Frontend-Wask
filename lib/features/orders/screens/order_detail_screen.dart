@@ -23,9 +23,9 @@ class OrderDetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Entrega aprox: ${order.deliveryEta}'),
-                Text('Lugar: ${order.address}'),
-                Text('Tienda: ${order.storeName}'),
+                Text('Entrega aprox: ${order.deliveryEta ?? 'N/D'}'),
+                Text('Lugar: ${order.address ?? 'N/D'}'),
+                Text('Tienda: ${order.storeName ?? 'N/D'}'),
                 Text('Estado: ${order.status}'),
               ],
             ),
@@ -55,24 +55,24 @@ class OrderDetailScreen extends StatelessWidget {
             title: 'Detalle de pago',
             child: Column(
               children: [
-                _PaymentRow(label: 'Subtotal', value: order.subtotal),
-                _PaymentRow(label: 'Delivery', value: order.deliveryCost),
-                _PaymentRow(label: 'Descuento', value: -order.discount),
+                _PaymentRow(label: 'Subtotal', value: order.subtotal ?? 0),
+                _PaymentRow(label: 'Delivery', value: order.deliveryCost ?? 0),
+                _PaymentRow(label: 'Descuento', value: -(order.discount ?? 0)),
                 const Divider(),
                 _PaymentRow(label: 'Total', value: order.total, isTotal: true),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Metodo: ${order.paymentMethod}'),
+                  child: Text('Metodo: ${order.paymentMethod ?? 'N/D'}'),
                 ),
               ],
             ),
           ),
-          if (order.deliveryNote.isNotEmpty) ...[
+          if ((order.deliveryNote ?? '').isNotEmpty) ...[
             const SizedBox(height: 12),
             _SectionCard(
               title: 'Instruccion de entrega',
-              child: Text(order.deliveryNote),
+              child: Text(order.deliveryNote ?? ''),
             ),
           ],
         ],

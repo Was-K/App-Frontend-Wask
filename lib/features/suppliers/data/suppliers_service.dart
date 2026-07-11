@@ -1,52 +1,33 @@
 import '../../../core/network/api_client.dart';
 import '../../shared/models/app_models.dart';
 
+/// Servicio de tiendas para la app del cliente.
+///
+/// En el backend NO existe un modelo `Supplier`: las tiendas son `Business`.
+/// El cliente consume los endpoints públicos `GET /business/shops` y
+/// `GET /business/shops/:id`, que devuelven solo negocios VERIFIED + ACTIVE.
 class SuppliersService {
   SuppliersService({required ApiClient apiClient}) : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
-  Future<List<Supplier>> getSuppliers() {
+  /// Lista las tiendas disponibles para el cliente. [q] filtra por nombre.
+  Future<List<Supplier>> getSuppliers({String? q}) {
+    final query = <String, String>{};
+    if (q != null && q.trim().isNotEmpty) {
+      query['q'] = q.trim();
+    }
     return _apiClient.get<List<Supplier>>(
-      '/suppliers',
+      '/business/shops',
+      query: query.isEmpty ? null : query,
       parser: (data) => _parseList(data, Supplier.fromJson),
     );
   }
 
-  Future<Supplier> createSupplier({
-    required String name,
-    String? email,
-    String? phone,
-  }) {
-    return _apiClient.post<Supplier>(
-      '/suppliers',
-      body: {
-        'name': name,
-        if (email != null) 'email': email,
-        if (phone != null) 'phone': phone,
-      },
-      parser: (data) => Supplier.fromJson(_asMap(data)),
-    );
-  }
-
-  Future<Supplier> updateSupplier({
-    required String id,
-    String? name,
-    String? status,
-  }) {
-    return _apiClient.patch<Supplier>(
-      '/suppliers/$id',
-      body: {
-        if (name != null) 'name': name,
-        if (status != null) 'status': status,
-      },
-      parser: (data) => Supplier.fromJson(_asMap(data)),
-    );
-  }
-
-  Future<Supplier> verifySupplier(String id) {
-    return _apiClient.post<Supplier>(
-      '/suppliers/$id/verify',
+  /// Detalle de una tienda por id.
+  Future<Supplier> getSupplier(String id) {
+    return _apiClient.get<Supplier>(
+      '/business/shops/$id',
       parser: (data) => Supplier.fromJson(_asMap(data)),
     );
   }

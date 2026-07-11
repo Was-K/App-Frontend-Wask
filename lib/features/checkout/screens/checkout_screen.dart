@@ -169,40 +169,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ? null
                       : () async {
                           final appState = context.read<AppStateProvider>();
-                          final currentUser = appState.currentUser;
-                          final businessId = currentUser?.companyId;
-                          final supplierIds = cart.itemList
+                          // La tienda a la que se compra viene en cada item del
+                          // carrito (supplierId = businessId del backend).
+                          final storeIds = cart.itemList
                               .map((item) => item.supplierId)
                               .whereType<String>()
+                              .where((id) => id.isNotEmpty)
                               .toSet();
 
-                          if (businessId == null || businessId.isEmpty) {
+                          if (storeIds.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'No se puede crear el pedido porque falta businessId.',
+                                  'No se pudo identificar la tienda del pedido.',
                                 ),
                               ),
                             );
                             return;
                           }
 
-                          if (supplierIds.isEmpty) {
+                          if (storeIds.length > 1) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'No se puede crear el pedido porque falta supplierId.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-
-                          if (supplierIds.length > 1) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'El carrito tiene productos de varios proveedores.',
+                                  'El carrito tiene productos de varias tiendas. Deja productos de una sola tienda.',
                                 ),
                               ),
                             );
@@ -232,8 +222,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             deliveryCost: delivery,
                             discount: discount,
                             deliveryNote: widget.deliveryInstruction,
-                            businessId: businessId,
-                            supplierId: supplierIds.first,
+                            businessId: storeIds.first,
                           );
 
                           if (!mounted) {

@@ -1,6 +1,12 @@
 import '../../../core/network/api_client.dart';
 import '../../shared/models/app_models.dart';
 
+/// Servicio de productos para la app del cliente (solo lectura).
+///
+/// El cliente consume `GET /products` (el backend solo devuelve productos
+/// APPROVED + ACTIVE para el rol CUSTOMER) y `GET /products/:id`.
+/// La creación/edición de productos es exclusiva del portal web del proveedor
+/// (rol BUSINESS_OWNER), por eso aquí no existen.
 class ProductsService {
   ProductsService({required ApiClient apiClient}) : _apiClient = apiClient;
 
@@ -9,7 +15,7 @@ class ProductsService {
   Future<List<Product>> getProducts({
     String? q,
     String? category,
-    String? supplierId,
+    String? businessId,
   }) async {
     final query = <String, String>{};
     if (q != null && q.isNotEmpty) {
@@ -18,8 +24,8 @@ class ProductsService {
     if (category != null && category.isNotEmpty) {
       query['category'] = category;
     }
-    if (supplierId != null && supplierId.isNotEmpty) {
-      query['supplierId'] = supplierId;
+    if (businessId != null && businessId.isNotEmpty) {
+      query['businessId'] = businessId;
     }
 
     return _apiClient.get<List<Product>>(
@@ -29,47 +35,9 @@ class ProductsService {
     );
   }
 
-  Future<Product> createProduct({
-    required String name,
-    required double price,
-    required String category,
-    String? supplierId,
-    String? brand,
-    String? description,
-  }) {
-    return _apiClient.post<Product>(
-      '/products',
-      body: {
-        'name': name,
-        'price': price,
-        'category': category,
-        if (supplierId != null) 'supplierId': supplierId,
-        if (brand != null) 'brand': brand,
-        if (description != null) 'description': description,
-      },
-      parser: (data) => Product.fromJson(_asMap(data)),
-    );
-  }
-
-  Future<Product> updateProduct({
-    required String id,
-    String? name,
-    double? price,
-    String? category,
-    String? supplierId,
-    String? brand,
-    String? description,
-  }) {
-    return _apiClient.patch<Product>(
+  Future<Product> getProduct(String id) {
+    return _apiClient.get<Product>(
       '/products/$id',
-      body: {
-        if (name != null) 'name': name,
-        if (price != null) 'price': price,
-        if (category != null) 'category': category,
-        if (supplierId != null) 'supplierId': supplierId,
-        if (brand != null) 'brand': brand,
-        if (description != null) 'description': description,
-      },
       parser: (data) => Product.fromJson(_asMap(data)),
     );
   }

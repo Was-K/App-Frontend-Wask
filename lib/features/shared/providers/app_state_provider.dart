@@ -124,9 +124,7 @@ class AppStateProvider extends ChangeNotifier {
     required String lastName,
     required String email,
     required String password,
-    required String role,
-    String? companyId,
-    String? supplierId,
+    String? phone,
   }) async {
     _setLoading(true);
     _errorMessage = null;
@@ -136,9 +134,7 @@ class AppStateProvider extends ChangeNotifier {
         lastName: lastName,
         email: email,
         password: password,
-        role: role,
-        companyId: companyId,
-        supplierId: supplierId,
+        phone: phone,
       );
       return user;
     } catch (error) {
@@ -188,7 +184,6 @@ class AppStateProvider extends ChangeNotifier {
     required double discount,
     required String deliveryNote,
     required String businessId,
-    required String supplierId,
   }) async {
     if (_currentUser == null || selectedAddress == null || items.isEmpty) {
       return null;
@@ -211,7 +206,7 @@ class AppStateProvider extends ChangeNotifier {
         status: 'EN_CAMINO',
         deliveryNote: deliveryNote,
         businessId: businessId,
-        supplierId: supplierId,
+        supplierId: businessId,
       );
       _orders = <OrderRecord>[order, ..._orders];
       await _saveOrders();
@@ -224,9 +219,9 @@ class AppStateProvider extends ChangeNotifier {
     try {
       final order = await _ordersService.createOrder(
         businessId: businessId,
-        supplierId: supplierId,
         items: items,
         notes: deliveryNote,
+        deliveryAddress: selectedAddress?.formatted,
       );
       return order;
     } catch (error) {

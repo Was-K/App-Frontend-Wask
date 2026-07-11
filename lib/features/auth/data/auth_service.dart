@@ -27,26 +27,24 @@ class AuthService {
     return tokens;
   }
 
+  /// Registro de cliente final. El backend crea un usuario CUSTOMER activo
+  /// (endpoint público POST /auth/register-customer). No emite tokens: tras
+  /// registrarse el usuario debe iniciar sesión.
   Future<AppUser> register({
     required String firstName,
     required String lastName,
     required String email,
     required String password,
-    required String role,
-    String? companyId,
-    String? supplierId,
+    String? phone,
   }) {
     return _apiClient.post<AppUser>(
-      '/auth/register',
+      '/auth/register-customer',
       body: {
         'firstName': firstName.trim(),
         'lastName': lastName.trim(),
         'email': email.trim(),
         'password': password,
-        'role': role,
-        if (companyId != null && companyId.isNotEmpty) 'companyId': companyId,
-        if (supplierId != null && supplierId.isNotEmpty)
-          'supplierId': supplierId,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
       },
       parser: (data) => AppUser.fromJson(_asMap(data)),
     );

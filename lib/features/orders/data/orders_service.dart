@@ -13,17 +13,19 @@ class OrdersService {
     );
   }
 
+  /// Crea un pedido. [businessId] es la tienda a la que se compra.
+  /// El backend (CreateOrderDto) solo acepta businessId, items, notes y
+  /// deliveryAddress; enviar campos extra provoca 400 (forbidNonWhitelisted).
   Future<OrderRecord> createOrder({
     required String businessId,
-    required String supplierId,
     required List<OrderLine> items,
     String? notes,
+    String? deliveryAddress,
   }) {
     return _apiClient.post<OrderRecord>(
       '/orders',
       body: {
         'businessId': businessId,
-        'supplierId': supplierId,
         'items': items
             .map((item) => {
                   'productId': item.productId,
@@ -31,6 +33,8 @@ class OrdersService {
                 })
             .toList(),
         if (notes != null && notes.isNotEmpty) 'notes': notes,
+        if (deliveryAddress != null && deliveryAddress.isNotEmpty)
+          'deliveryAddress': deliveryAddress,
       },
       parser: (data) => OrderRecord.fromJson(_asMap(data)),
     );

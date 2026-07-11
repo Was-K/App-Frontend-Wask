@@ -20,7 +20,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isAgeVerified = false;
-  String _role = 'BUSINESS';
 
   @override
   void dispose() {
@@ -73,7 +72,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           lastName: lastName,
           email: email,
           password: password,
-          role: _role,
         );
 
     if (!mounted) {
@@ -166,31 +164,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   hintText: 'Confirmar contrasena',
                   prefixIcon: Icon(Icons.lock_reset_rounded),
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _role,
-                decoration: const InputDecoration(
-                  labelText: 'Rol',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'BUSINESS',
-                    child: Text('Negocio (BUSINESS)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'SUPPLIER',
-                    child: Text('Proveedor (SUPPLIER)'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _role = value;
-                  });
-                },
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(

@@ -108,7 +108,9 @@ class Product {
       name: _asString(json['name']) ?? '',
       price: _asDouble(json['price'] ?? json['unitPrice']),
       category: _asString(json['category']),
-      supplierId: _asString(json['supplierId']),
+      // El backend identifica la tienda con businessId; lo guardamos como
+      // supplierId para la lógica de carrito/checkout del cliente.
+      supplierId: _asString(json['supplierId']) ?? _asString(json['businessId']),
       brand: _asString(json['brand']),
       description: _asString(json['description']),
       isActive: _asBool(json['isActive']),
@@ -147,10 +149,12 @@ class Supplier {
   final String? phone;
 
   factory Supplier.fromJson(Map<String, dynamic> json) {
+    // Una "tienda" viene del backend como Business: usa companyName y
+    // operationalStatus. Mantenemos compatibilidad con la forma antigua.
     return Supplier(
       id: _asString(json['id']) ?? _asString(json['uuid']) ?? '',
-      name: _asString(json['name']) ?? '',
-      status: _asString(json['status']),
+      name: _asString(json['name']) ?? _asString(json['companyName']) ?? '',
+      status: _asString(json['status']) ?? _asString(json['operationalStatus']),
       isVerified: _asBool(json['isVerified']),
       email: _asString(json['email']),
       phone: _asString(json['phone']),

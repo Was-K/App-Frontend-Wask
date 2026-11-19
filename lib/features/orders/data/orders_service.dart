@@ -14,13 +14,15 @@ class OrdersService {
   }
 
   /// Crea un pedido. [businessId] es la tienda a la que se compra.
-  /// El backend (CreateOrderDto) solo acepta businessId, items, notes y
-  /// deliveryAddress; enviar campos extra provoca 400 (forbidNonWhitelisted).
+  /// El backend (CreateOrderDto) usa ValidationPipe whitelist + forbidNonWhitelisted:
+  /// enviar solo los campos permitidos por el DTO.
   Future<OrderRecord> createOrder({
     required String businessId,
     required List<OrderLine> items,
     String? notes,
     String? deliveryAddress,
+    String? paymentMethod,
+    bool? applyLoyaltyReward,
   }) {
     return _apiClient.post<OrderRecord>(
       '/orders',
@@ -35,6 +37,10 @@ class OrdersService {
         if (notes != null && notes.isNotEmpty) 'notes': notes,
         if (deliveryAddress != null && deliveryAddress.isNotEmpty)
           'deliveryAddress': deliveryAddress,
+        if (paymentMethod != null && paymentMethod.isNotEmpty)
+          'paymentMethod': paymentMethod,
+        if (applyLoyaltyReward != null)
+          'applyLoyaltyReward': applyLoyaltyReward,
       },
       parser: (data) => OrderRecord.fromJson(_asMap(data)),
     );

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/navigation/wask_routes.dart';
+import '../../../core/theme/wask_theme.dart';
+import '../../shop/providers/cart_provider.dart';
 
 class WaskBottomNav extends StatelessWidget {
   const WaskBottomNav({
@@ -40,37 +43,73 @@ class WaskBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: _indexFromRoute(),
-      onDestinationSelected: (index) {
-        final targetRoute = _routeFromIndex(index);
-        if (targetRoute == currentRoute) {
-          return;
-        }
-        Navigator.pushReplacementNamed(context, targetRoute);
-      },
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Inicio',
+    final cartCount = context.select<CartProvider, int>((c) => c.totalItems);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0D1017),
+        border: Border(
+          top: BorderSide(color: WaskColors.border, width: 1),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-          selectedIcon: Icon(Icons.receipt_long_rounded),
-          label: 'Pedidos',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.search_outlined),
-          selectedIcon: Icon(Icons.search_rounded),
-          label: 'Buscar',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.shopping_cart_outlined),
-          selectedIcon: Icon(Icons.shopping_cart_rounded),
-          label: 'Carrito',
-        ),
-      ],
+      ),
+      child: NavigationBar(
+        height: 56,
+        elevation: 0,
+        backgroundColor: const Color(0xFF0D1017),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        selectedIndex: _indexFromRoute(),
+        onDestinationSelected: (index) {
+          final targetRoute = _routeFromIndex(index);
+          if (targetRoute == currentRoute) {
+            return;
+          }
+          Navigator.pushReplacementNamed(context, targetRoute);
+        },
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.home_outlined, size: 20),
+            selectedIcon: Icon(Icons.home_rounded, size: 20),
+            label: 'Inicio',
+            tooltip: '',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined, size: 20),
+            selectedIcon: Icon(Icons.receipt_long_rounded, size: 20),
+            label: 'Pedidos',
+            tooltip: '',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.search_outlined, size: 20),
+            selectedIcon: Icon(Icons.search_rounded, size: 20),
+            label: 'Buscar',
+            tooltip: '',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: cartCount > 0,
+              backgroundColor: WaskColors.energyOrange,
+              label: Text(
+                '$cartCount',
+                style:
+                    const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+              ),
+              child: const Icon(Icons.shopping_cart_outlined, size: 20),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: cartCount > 0,
+              backgroundColor: WaskColors.energyOrange,
+              label: Text(
+                '$cartCount',
+                style:
+                    const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+              ),
+              child: const Icon(Icons.shopping_cart_rounded, size: 20),
+            ),
+            label: 'Carrito',
+            tooltip: '',
+          ),
+        ],
+      ),
     );
   }
 }

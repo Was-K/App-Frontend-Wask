@@ -80,6 +80,28 @@ class AuthService {
     return tokens;
   }
 
+  Future<void> forgotPassword(String email) async {
+    await _apiClient.post<void>(
+      '/auth/forgot-password',
+      body: {'email': email.trim()},
+      parser: (_) => null,
+    );
+  }
+
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    await _apiClient.post<void>(
+      '/auth/reset-password',
+      body: {
+        'token': token.trim(),
+        'password': newPassword,
+      },
+      parser: (_) => null,
+    );
+  }
+
   Future<AppUser?> getCurrentUser() async {
     return _apiClient.get<AppUser?>(
       '/users/me',

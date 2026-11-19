@@ -1,12 +1,16 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/navigation/wask_routes.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/token_storage.dart';
+import '../../../core/services/geolocation_service.dart';
+import '../../../core/services/loyalty_service.dart';
 import '../../auth/data/auth_service.dart';
 import '../../orders/data/orders_service.dart';
 import '../models/app_models.dart';
@@ -18,6 +22,7 @@ class AppStateProvider extends ChangeNotifier {
     this._apiClient,
     this._authService,
     this._ordersService,
+    this._loyaltyService,
   );
 
   final SharedPreferences _prefs;
@@ -25,21 +30,77 @@ class AppStateProvider extends ChangeNotifier {
   final ApiClient _apiClient;
   final AuthService _authService;
   final OrdersService _ordersService;
+  final LoyaltyService _loyaltyService;
 
   AppUser? _currentUser;
   List<DeliveryAddress> _addresses = <DeliveryAddress>[];
   String? _selectedAddressId;
   List<OrderRecord> _orders = <OrderRecord>[];
+  LoyaltyStatus? _loyaltyStatus;
+  String? _loyaltyBannerMessage;
   bool _isLoading = false;
+  bool _isSimulatingLoyalty = false;
   String? _errorMessage;
+  int _mockDeliveredBonus = 0;
 
   AppUser? get currentUser => _currentUser;
   List<DeliveryAddress> get addresses =>
       List<DeliveryAddress>.unmodifiable(_addresses);
   List<OrderRecord> get orders => List<OrderRecord>.unmodifiable(_orders);
+  LoyaltyStatus? get loyaltyStatus => _loyaltyStatus;
+  String? get loyaltyBannerMessage => _loyaltyBannerMessage;
   bool get isLoading => _isLoading;
+  bool get isSimulatingLoyalty => _isSimulatingLoyalty;
   String? get errorMessage => _errorMessage;
   ApiClient get apiClient => _apiClient;
+  TokenStorage get tokenStorage => _tokenStorage;
+  bool get isAuthenticated => _currentUser != null;
+
+  String get initialRoute {
+    if (_currentUser == null) {
+      return WaskRoutes.login;
+    }
+    return selectedAddress != null ? WaskRoutes.home : WaskRoutes.addressSelect;
+  }
+
+  GeoPoint get activeCustomerLocation {
+    final addr = selectedAddress;
+    if (addr?.latitude != null && addr?.longitude != null) {
+      return GeoPoint(
+        latitude: addr!.latitude!,
+        longitude: addr.longitude!,
+        district: addr.district,
+      );
+    }
+    return GeolocationService.fallbackCoordinatesForDistrict(
+      addr?.district ?? 'Miraflores',
+    );
+  }
+
+  double? distanceToSupplierKm(Supplier supplier) {
+    final customer = activeCustomerLocation;
+    double? lat = supplier.latitude;
+    double? lng = supplier.longitude;
+    if (lat == null || lng == null) {
+      final addr = (supplier.address ?? '').toLowerCase();
+      for (final d in GeolocationService.limaDistricts) {
+        if (addr.contains(d.name.toLowerCase())) {
+          lat = d.latitude;
+          lng = d.longitude;
+          break;
+        }
+      }
+    }
+    if (lat == null || lng == null) {
+      return null;
+    }
+    return GeolocationService.distanceKm(
+      customer.latitude,
+      customer.longitude,
+      lat,
+      lng,
+    );
+  }
 
   DeliveryAddress? get selectedAddress {
     if (_selectedAddressId == null) {
@@ -61,15 +122,34 @@ class AppStateProvider extends ChangeNotifier {
     return fullName.split(RegExp(r'\s+')).first;
   }
 
-  static Future<AppStateProvider> create() async {
+  double calculateDeliveryFee(double subtotal) {
+    if (subtotal >= 80 || (_loyaltyStatus?.hasFreeDeliveryReward == true)) {
+      return 0.0;
+    }
+    return 7.0;
+  }
+
+  void clearLoyaltyBanner() {
+    if (_loyaltyBannerMessage == null) {
+      return;
+    }
+    _loyaltyBannerMessage = null;
+    notifyListeners();
+  }
+
+  static Future<AppStateProvider> create({http.Client? httpClient}) async {
     final prefs = await SharedPreferences.getInstance();
     final tokenStorage = TokenStorage(prefs);
-    final apiClient = ApiClient(tokenStorage: tokenStorage);
+    final apiClient = ApiClient(
+      tokenStorage: tokenStorage,
+      httpClient: httpClient,
+    );
     final authService = AuthService(
       apiClient: apiClient,
       tokenStorage: tokenStorage,
     );
     final ordersService = OrdersService(apiClient: apiClient);
+    final loyaltyService = LoyaltyService(apiClient: apiClient);
 
     final provider = AppStateProvider._(
       prefs,
@@ -77,6 +157,7 @@ class AppStateProvider extends ChangeNotifier {
       apiClient,
       authService,
       ordersService,
+      loyaltyService,
     );
     await provider.restoreSession();
     return provider;
@@ -96,6 +177,7 @@ class AppStateProvider extends ChangeNotifier {
     }
     try {
       _currentUser = await _authService.getCurrentUser();
+      await _loadUserData();
       notifyListeners();
     } catch (error) {
       debugPrint('Restore session failed: $error');
@@ -149,18 +231,26 @@ class AppStateProvider extends ChangeNotifier {
     required String label,
     required String street,
     required String district,
+    String apartmentOrInterior = '',
+    String intercom = '',
     String reference = '',
+    String contactPhone = '',
+    double? latitude,
+    double? longitude,
   }) async {
-    if (_currentUser == null) {
-      return;
-    }
-
+    final fallback =
+        GeolocationService.fallbackCoordinatesForDistrict(district);
     final newAddress = DeliveryAddress(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       label: label.trim().isEmpty ? 'Direccion' : label.trim(),
       street: street.trim(),
       district: district,
+      apartmentOrInterior: apartmentOrInterior.trim(),
+      intercom: intercom.trim(),
       reference: reference.trim(),
+      contactPhone: contactPhone.trim(),
+      latitude: latitude ?? fallback.latitude,
+      longitude: longitude ?? fallback.longitude,
     );
 
     _addresses = <DeliveryAddress>[newAddress, ..._addresses];
@@ -175,6 +265,73 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadLoyaltyStatus() async {
+    if (AppConfig.enableMocks) {
+      final delivered = _orders
+              .where((o) =>
+                  o.status.toUpperCase() == 'DELIVERED' ||
+                  o.status.toUpperCase() == 'ENTREGADO')
+              .length +
+          _mockDeliveredBonus;
+      final used = _orders
+          .where((o) =>
+              o.status.toUpperCase() != 'CANCELLED' &&
+              (o.deliveryNote ?? '').contains('[LOYALTY_FREE_DELIVERY]'))
+          .length;
+      final freeAvailable = (delivered ~/ 10) - used;
+      final hasReward = freeAvailable > 0;
+      _loyaltyStatus = LoyaltyStatus(
+        deliveredOrders: delivered,
+        targetOrders: 10,
+        currentCycleProgress: hasReward ? 10 : delivered % 10,
+        freeDeliveriesAvailable: freeAvailable < 0 ? 0 : freeAvailable,
+        hasFreeDeliveryReward: hasReward,
+        nextRewardIn: hasReward ? 0 : 10 - (delivered % 10),
+        rewardLabel: '10 pedidos entregados = 1 Delivery Gratis',
+      );
+      notifyListeners();
+      return;
+    }
+
+    try {
+      _loyaltyStatus = await _loyaltyService.getLoyaltyStatus();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Loyalty load failed: $error');
+    }
+  }
+
+  Future<LoyaltyStatus?> simulateTenDeliveredOrders() async {
+    _isSimulatingLoyalty = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      if (AppConfig.enableMocks) {
+        final currentDelivered = _loyaltyStatus?.deliveredOrders ?? 0;
+        final nextMultiple = ((currentDelivered ~/ 10) + 1) * 10;
+        _mockDeliveredBonus += nextMultiple - currentDelivered;
+        await loadLoyaltyStatus();
+        _loyaltyBannerMessage =
+            '¡Felicidades! 10 pedidos entregados = 1 Delivery Gratis desbloqueado';
+        notifyListeners();
+        return _loyaltyStatus;
+      }
+
+      final updated = await _loyaltyService.simulateTenDeliveredOrders();
+      _loyaltyStatus = updated;
+      _loyaltyBannerMessage =
+          '¡Felicidades! 10 pedidos entregados = 1 Delivery Gratis desbloqueado';
+      notifyListeners();
+      return updated;
+    } catch (error) {
+      _errorMessage = _friendlyError(error);
+      return null;
+    } finally {
+      _isSimulatingLoyalty = false;
+      notifyListeners();
+    }
+  }
+
   Future<OrderRecord?> placeOrder({
     required List<OrderLine> items,
     required String storeName,
@@ -184,6 +341,7 @@ class AppStateProvider extends ChangeNotifier {
     required double discount,
     required String deliveryNote,
     required String businessId,
+    bool applyLoyaltyReward = false,
   }) async {
     if (_currentUser == null || selectedAddress == null || items.isEmpty) {
       return null;
@@ -191,12 +349,15 @@ class AppStateProvider extends ChangeNotifier {
 
     if (AppConfig.enableMocks) {
       final total = subtotal + deliveryCost - discount;
+      final noteWithReward = applyLoyaltyReward
+          ? '${deliveryNote.trim()} [LOYALTY_FREE_DELIVERY]'.trim()
+          : deliveryNote;
       final order = OrderRecord(
         id: 'WK-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
         createdAt: DateTime.now(),
         deliveryEta: '25-30 min',
         storeName: storeName,
-        address: selectedAddress!.formatted,
+        address: selectedAddress!.formattedFullAddress,
         items: items,
         subtotal: subtotal,
         deliveryCost: deliveryCost,
@@ -204,12 +365,13 @@ class AppStateProvider extends ChangeNotifier {
         total: total,
         paymentMethod: paymentMethod,
         status: 'EN_CAMINO',
-        deliveryNote: deliveryNote,
+        deliveryNote: noteWithReward,
         businessId: businessId,
         supplierId: businessId,
       );
       _orders = <OrderRecord>[order, ..._orders];
       await _saveOrders();
+      await loadLoyaltyStatus();
       notifyListeners();
       return order;
     }
@@ -221,8 +383,11 @@ class AppStateProvider extends ChangeNotifier {
         businessId: businessId,
         items: items,
         notes: deliveryNote,
-        deliveryAddress: selectedAddress?.formatted,
+        deliveryAddress: selectedAddress!.formattedFullAddress,
+        paymentMethod: paymentMethod,
+        applyLoyaltyReward: applyLoyaltyReward,
       );
+      await loadLoyaltyStatus();
       return order;
     } catch (error) {
       _errorMessage = _friendlyError(error);
@@ -238,6 +403,8 @@ class AppStateProvider extends ChangeNotifier {
     _addresses = <DeliveryAddress>[];
     _selectedAddressId = null;
     _orders = <OrderRecord>[];
+    _loyaltyStatus = null;
+    _loyaltyBannerMessage = null;
     notifyListeners();
   }
 
@@ -273,6 +440,8 @@ class AppStateProvider extends ChangeNotifier {
       _selectedAddressId = _addresses.first.id;
       await _saveSelectedAddress();
     }
+
+    await loadLoyaltyStatus();
   }
 
   List<DeliveryAddress> _loadAddresses() {

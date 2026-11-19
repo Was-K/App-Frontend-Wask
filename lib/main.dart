@@ -49,10 +49,10 @@ class WaskApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'WAS-K',
+        title: 'WASK — Licores en minutos',
         debugShowCheckedModeBanner: false,
         theme: WaskTheme.darkTheme,
-        initialRoute: WaskRoutes.login,
+        initialRoute: appStateProvider.initialRoute,
         routes: {
           WaskRoutes.login: (_) => const LoginScreen(),
           WaskRoutes.register: (_) => const RegisterScreen(),
@@ -62,9 +62,16 @@ class WaskApp extends StatelessWidget {
           WaskRoutes.search: (_) => const SearchScreen(),
           WaskRoutes.cart: (_) => const CartScreen(),
           WaskRoutes.account: (_) => const AccountScreen(),
-          WaskRoutes.tracking: (_) => const TrackingScreen(),
         },
         onGenerateRoute: (settings) {
+          if (settings.name == WaskRoutes.tracking) {
+            final initialOrder = settings.arguments is OrderRecord
+                ? settings.arguments as OrderRecord
+                : null;
+            return MaterialPageRoute<void>(
+              builder: (_) => TrackingScreen(initialOrder: initialOrder),
+            );
+          }
           if (settings.name == WaskRoutes.productDetail) {
             final args = settings.arguments as Map<String, dynamic>?;
             return MaterialPageRoute<void>(
@@ -73,6 +80,15 @@ class WaskApp extends StatelessWidget {
                 productName: (args?['name'] ?? 'Producto WAS-K') as String,
                 price: ((args?['price'] ?? 0) as num).toDouble(),
                 supplierId: args?['supplierId'] as String?,
+                imageUrl: args?['imageUrl'] as String?,
+                brand: args?['brand'] as String?,
+                description: args?['description'] as String?,
+                availableStock: args?['availableStock'] as int?,
+                storeName: args?['storeName'] as String?,
+                distanceKm: (args?['distanceKm'] as num?)?.toDouble(),
+                isStoreOpen: args?['isStoreOpen'] as bool? ?? true,
+                inCoverage: args?['inCoverage'] as bool? ?? true,
+                unavailableReason: args?['unavailableReason'] as String?,
               ),
             );
           }

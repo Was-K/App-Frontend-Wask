@@ -100,7 +100,7 @@ class ApiClient {
       if (response.statusCode == 401 && retryOnUnauthorized) {
         final refreshed = await _refreshToken();
         if (refreshed) {
-          return _send(
+          return await _send(
             method,
             path,
             query: query,

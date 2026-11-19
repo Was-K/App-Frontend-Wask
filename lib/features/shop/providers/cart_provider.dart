@@ -7,6 +7,8 @@ class CartItem {
     required this.price,
     required this.quantity,
     this.supplierId,
+    this.imageUrl,
+    this.storeName,
   });
 
   final String productId;
@@ -14,6 +16,8 @@ class CartItem {
   final double price;
   final int quantity;
   final String? supplierId;
+  final String? imageUrl;
+  final String? storeName;
 
   CartItem copyWith({
     String? productId,
@@ -21,6 +25,8 @@ class CartItem {
     double? price,
     int? quantity,
     String? supplierId,
+    String? imageUrl,
+    String? storeName,
   }) {
     return CartItem(
       productId: productId ?? this.productId,
@@ -28,6 +34,8 @@ class CartItem {
       price: price ?? this.price,
       quantity: quantity ?? this.quantity,
       supplierId: supplierId ?? this.supplierId,
+      imageUrl: imageUrl ?? this.imageUrl,
+      storeName: storeName ?? this.storeName,
     );
   }
 
@@ -65,6 +73,8 @@ class CartProvider extends ChangeNotifier {
     required double price,
     int quantity = 1,
     String? supplierId,
+    String? imageUrl,
+    String? storeName,
   }) {
     final current = _items[productId];
     if (current == null) {
@@ -74,10 +84,15 @@ class CartProvider extends ChangeNotifier {
         price: price,
         quantity: quantity,
         supplierId: supplierId,
+        imageUrl: imageUrl,
+        storeName: storeName,
       );
     } else {
-      _items[productId] =
-          current.copyWith(quantity: current.quantity + quantity);
+      _items[productId] = current.copyWith(
+        quantity: current.quantity + quantity,
+        imageUrl: imageUrl ?? current.imageUrl,
+        storeName: storeName ?? current.storeName,
+      );
     }
     notifyListeners();
   }

@@ -97,7 +97,8 @@ class ApiClient {
         body: body,
       ).timeout(_timeout);
 
-      if (response.statusCode == 401 && retryOnUnauthorized) {
+      final isAuthPath = path.startsWith('/auth/');
+      if (response.statusCode == 401 && retryOnUnauthorized && !isAuthPath) {
         final refreshed = await _refreshToken();
         if (refreshed) {
           return await _send(
